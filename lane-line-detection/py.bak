@@ -1,0 +1,420 @@
+MAIN
+
+#!/usr/bin/python3
+
+import numpy as np
+
+from sdl_utils import SDLWrapper2
+from opencv_utils import Video
+from feature_extractor import FeatureExtractor
+
+#----------------------------------------------------------------------------------------
+if __name__ == '__main__':
+    # constants
+    WIN_WIDTH, WIN_HEIGHT = 960, 540
+    WIDTH, HEIGHT = 480, 270
+    #WIDTH, HEIGHT = 960, 540
+
+    sdl = SDLWrapper2(WIN_WIDTH, WIN_HEIGHT)
+    sdl.main_loop()
+    exit(0)
+
+
+    # load video file
+    #vid = Video('../resources/driving1.mp4', WIDTH, HEIGHT)
+    #vid = Video('../resources/driving2.mp4', WIDTH, HEIGHT)
+    #vid = Video('../resources/driving3.mp4', WIDTH, HEIGHT, 8000)
+    vid = Video('../resources/driving4.mp4', WIDTH, HEIGHT, 11000)
+    
+    polygon1 = np.array([[50,270], [220,160], [360,160], [480,270]])    # driving1.mp4
+    polygon2 = np.array([[30, 270], [240, 160], [460, 270]])            # driving2.mp4
+    polygon3 = np.array([[30, 270], [240, 160], [450, 270]])            # driving3.mp4
+    polygon4 = np.array([[10, 270], [240, 160], [470, 270]])            # driving4.mp4
+    
+    # instance of the feature extractor
+    extractor = FeatureExtractor(polygon4)
+
+    # start SDL2
+    sdl = SDLWrapper(WIN_WIDTH, WIN_HEIGHT)
+
+    # main loop
+    is_running = True
+    while is_running:
+        # get frame from video
+        _, frame = vid.get_next_frame()
+        extractor.set_view(sdl.selected_view)
+        extractor.extract_lane_markers(frame)
+        # update SDL2 and draw
+        is_running = sdl.update(extractor.get_frame())
+
+    print('frame', vid.current_frame)
+
+
+
+PREV SDLWRAPPER CLASS
+
+
+
+#----------------------------------------------------------------------------------------
+class SDLWrapper(object):
+    def __init__(self, window_width, window_height):
+        # initialize sdl and create window
+        self.window_width = window_width
+        self.window_height = window_height
+            
+        # initalize SDL and create a surface to draw opencv images to
+        sdl2.ext.init()
+        self.window = sdl2.ext.Window("SDL2", size=(self.window_width, self.window_height))
+        self.window.show()
+        self.surface = sdl2.SDL_GetWindowSurface(self.window.window)
+        self.surface_array = sdl2.ext.pixels3d(self.surface.contents)
+        # input
+        self.key_states = sdl2.SDL_GetKeyboardState(None)
+        self.key_down = False
+        # loop
+        self.is_running = True
+        self.next_frame = None
+        
+        # ugly hack to be able to switch between viewing modes
+        views = ['final', 'HSV', 'HLS', 'mask_light', 'mask_yellow', 'mask_white', 'mask_yw', 
+                 'mask_sobel_x', 'mask_sobel_yw', 'ROI_sobel_yw', 'threshold']
+        view_keys = [sdl2.SDLK_F1, sdl2.SDLK_F2, sdl2.SDLK_F3, sdl2.SDLK_F4, sdl2.SDLK_F5, 
+                     sdl2.SDLK_F6, sdl2.SDLK_F7, sdl2.SDLK_F8, sdl2.SDLK_F9, sdl2.SDLK_F10,
+                     sdl2.SDLK_F11]
+
+        self.views_dict = {}
+        for v, k in zip(views, view_keys):
+            self.views_dict[k] = v
+
+        self.selected_view = 'final'
+
+    #------------------------------------------------------------------------------------
+    def is_key_pressed(self, sdl_key_code):
+        # handles repeating keys (i.e. for first-person controls)
+        if self.key_states[sdl_key_code] and not self.key_down:
+            self.key_down = True
+            return True
+        elif not self.key_states[sdl_key_code] and self.key_down:
+            self.key_down = False
+            return False
+        
+    #------------------------------------------------------------------------------------
+    def select_view(self, keycode):
+        if keycode == sdl2.SDLK_ESCAPE:
+            self.is_running = False
+            return
+
+        if keycode in self.views_dict.keys():
+            self.selected_view = self.views_dict[keycode]
+            #print(f"selected view '{self.selected_view}'")
+    
+    #----------------------------------------------------------------------------------------
+    def to_rgba(self, frame):
+        if (frame.ndim == 2):
+            frame = frame.reshape(frame.shape[0], frame.shape[1], 1)
+            frame = np.repeat(frame, 3, axis=2)
+        # show view
+        cv2.putText(img=frame,
+                    text='view: ' + self.selected_view, 
+                    org=(3, 10), 
+                    fontFace=cv2.FONT_HERSHEY_TRIPLEX,
+                    color=(255, 0, 255),
+                    fontScale=0.4)
+        # add alpha
+        frame = np.insert(frame, 3, 255, axis=2)
+        
+        return frame
+
+    #----------------------------------------------------------------------------------------
+    def cv2_to_sdl2(self, frame):
+        frame = self.to_rgba(frame)
+        frame = frame.swapaxes(0, 1)
+        return frame
+    #------------------------------------------------------------------------------------
+    def update(self, cv2_frame):
+
+        # convert to format compatible with blitting
+        frame = self.cv2_to_sdl2(cv2_frame)
+        
+        if frame.shape[0] != self.window_width or frame.shape[1] != self.window_height:
+            frame = cv2.resize(frame, 
+                               (self.window_height, self.window_width), 
+                               interpolation=cv2.INTER_AREA)
+
+        # copy to SDL surface
+        np.copyto(self.surface_array, frame)
+
+        # SDL events and exit conditions
+        sdl_events = sdl2.ext.get_events()
+        for event in sdl_events:
+            if event == sdl2.SDL_QUIT:
+                self.is_running = False
+            
+            #print('event type:', event.type)
+            #print('symbol:', chr(event.key.keysym.sym))
+            
+            # the event type == sdl2.SDL_KeyboardEvent --> SDL_KEYDOWN or SDL_KEYUP
+            # event.state is SDL_PRESSED or SDL_RELEASED
+            # event.key.keysym.sym is the keycode
+            elif event.type == sdl2.SDL_KEYDOWN:
+                self.select_view(event.key.keysym.sym)
+
+        #if self.is_key_pressed(sdl2.SDL_SCANCODE_ESCAPE):
+        #    return False
+                        
+        # flip surfaces
+        self.window.refresh()
+        
+        # confirm that we're still running
+        return self.is_running
+    
+    #------------------------------------------------------------------------------------
+    def main_loop(self, first_frame, callback_fnc):
+        """
+        Enters SDL main loop, with a callback each frame.
+        Each frame, self.frame is copied to the surface, 
+        the callback_fnc may alter this.
+        """
+        self.next_frame = first_frame
+        
+        while (self.is_running):
+            
+            callback_fnc()
+
+            # copy to SDL surface
+            np.copyto(self.surface_array, self.next_frame)
+
+            # SDL events and exit conditions
+            sdl_events = sdl2.ext.get_events()
+            for event in sdl_events:
+                if event == sdl2.SDL_QUIT:
+                    return False
+                # the event type == sdl2.SDL_KeyboardEvent --> SDL_KEYDOWN or SDL_KEYUP
+                # event.state is SDL_PRESSED or SDL_RELEASED
+                # event.key.keysym.sym is the keycode
+                elif event.type == sdl2.SDL_KEYDOWN:
+                    self.select_view(event.key.keysym.sym)
+            
+            # flip surfaces
+            self.window.refresh()
+        
+
+
+FROM OPENCV_UTILS.PY
+
+#----------------------------------------------------------------------------------------
+class Plotter(object):
+    def __init__(self):
+        self.images = []
+        self.titles = []
+        self.cmaps = []
+    #------------------------------------------------------------------------------------
+    def add_image(self, title, img, cmap='gray'):
+        self.images.append(np.copy(img))
+        self.titles.append(title)
+        self.cmaps.append(cmap)
+    #------------------------------------------------------------------------------------
+    def plot_all(self):
+        n = len(self.images)
+        print(f'plotting {n} images')
+        n_x = int(np.sqrt(n))
+        n_y = int(n / n_x) + 1
+        
+        ar = self.images[0].shape[0] / self.images[0].shape[1]
+        sz_x = min(max(n_x, 20), 20)
+        sz_y = sz_x / ar
+                
+        fig, axs = plt.subplots(n_x, n_y, figsize=(sz_x, sz_y))
+        axs = np.ravel(axs)
+        for ax, img, title, cm in zip(axs, self.images, self.titles, self.cmaps):
+            #if img.ndim > 2:
+            #    ax.imshow(img[:, :, 0], cmap=cm)
+            #else:
+            #    ax.imshow(img, cmap=cm)
+            if cm != '':
+                ax.imshow(img, cmap=cm)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                ax.imshow(img)
+            ax.set_title(title), ax.set_xticks([]), ax.set_yticks([])
+        plt.show()
+
+#----------------------------------------------------------------------------------------
+def get_lane_lines(frame):
+    
+    ## N.B.! The resolution of the camera is fixed to 480x270 ##
+
+    # create a polygon containing the region of interest (roi)
+    stencil = np.zeros_like(frame[:, :, 0])
+    
+    # driving1.mp4:
+    #polygon = np.array([[50,270], [220,160], [360,160], [480,270]])
+    # driving2.mp4:
+    #polygon = np.array([[30, 270], [240, 160], [460, 270]])
+    # driving3.mp4:
+    #polygon = np.array([[30, 270], [240, 160], [450, 270]])
+    # driving4.mp4:
+    polygon = np.array([[10, 270], [240, 160], [470, 270]])
+    
+    cv2.fillConvexPoly(stencil, polygon, 1)
+    # crop frame to roi
+    frame_roi = cv2.bitwise_and(frame, frame, mask=stencil)
+    
+    # filter on yellow (hsv) and white (gray)
+    frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    yellow_lo = np.array([10, 100, 100], dtype='uint8')
+    yellow_hi = np.array([30, 255, 255], dtype='uint8')
+    mask_yellow = cv2.inRange(frame_hsv, yellow_lo, yellow_hi)
+    mask_white = cv2.inRange(frame_gray, 200, 255)
+    mask_yw = cv2.bitwise_or(mask_yellow, mask_white)
+    
+    # Canny filter image and add to mask
+    #edges = cv2.Canny(frame, 100, 200)
+    #mask_yw = cv2.bitwise_or(mask_yw, edges)
+    
+    # perform Sobel edge detection for the x direction
+    frame_gaussian = cv2.GaussianBlur(frame_gray, (5, 5), 1)
+    sobel_x = cv2.Sobel(frame_gaussian, cv2.CV_64F, 1, 0, ksize=3)
+    mask_sobel_x = np.zeros_like(stencil)
+    mask_sobel_x[sobel_x > 120] = 1
+    
+    # update mask
+    mask_yw_sobel = cv2.bitwise_or(mask_yw, mask_sobel_x)
+    
+    # apply yellow-white mask to roi
+    frame_roi_sobel_yw = cv2.bitwise_and(frame_roi, frame_roi, mask=mask_yw_sobel)
+    #return frame_roi_yw
+
+    # threshold only bright values
+    #_, frame_threshold = cv2.threshold(frame_roi_yw, 160, 250, cv2.THRESH_BINARY)
+    _, frame_threshold = cv2.threshold(frame_roi_sobel_yw, 110, 250, cv2.THRESH_BINARY)
+    
+    # get line segments
+    lines = cv2.HoughLinesP(frame_threshold[:,:,2], 2, np.pi/180.0, 20, maxLineGap=400)
+    
+    if (type(lines) != type(None)):
+        lines_overlay = np.zeros_like(frame)
+        left_x, left_y, right_x, right_y = [], [], [], []
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            cv2.circle(lines_overlay, (x1, y1), 4, (0, 255, 0))
+            cv2.circle(lines_overlay, (x2, y2), 4, (0, 255, 0))
+            cv2.line(lines_overlay, (x1, y1), (x2, y2), (255, 0, 0), 3)
+            
+            #beta1 = np.polyfit((x1, x2), (y1, y2), 1)[0]
+            #if beta1 > 0:   
+            #    left_x.append([x1, x2])
+            #    left_y.append([y1, y2])
+            #else:
+            #    right_x.append([x1, x2])
+            #    right_y.append([y1, y2])
+        #if len(left_x) > 0 and len(left_y) > 0 and \
+        #   len(right_x) > 0 and len(right_y) > 0:
+        #    p0 = (np.min(left_x), np.min(left_y))
+        #    p1 = (np.max(left_x), np.max(left_y))
+        #    p2 = (np.min(right_x), np.max(right_y))
+        #    p3 = (np.max(right_x), np.min(right_y))
+            #cv2.line(lines_overlay, p0, p1, (0, 255, 0), 4)
+            #cv2.line(lines_overlay, p2, p3, (0, 255, 0), 4)
+            #cv2.fillConvexPoly(lines_overlay, 
+            #                   np.array([p0, p1, p2, p3]), 
+            #                   (0, 63, 0))
+        
+        frame_lines = cv2.addWeighted(frame, 1.0, lines_overlay, 1, 1)
+    else:
+        frame_lines = frame
+    
+    return frame_lines
+
+#----------------------------------------------------------------------------------------
+def get_lane_lines_debug(frame):
+    # N.B.! The resolution of the camera HAS to be 480x270
+    
+    plotter = Plotter()
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    
+    plotter.add_image('original', frame, cmap='')
+    print(frame.shape)
+    
+    plotter.add_image('gray', frame[:, :, 0])
+    
+    # create a polygon with the region of interest
+    stencil = np.zeros_like(frame[:, :, 0])
+    polygon = np.array([[50,270], [220,160], [360,160], [480,270]])
+    cv2.fillConvexPoly(stencil, polygon, 1)
+    plotter.add_image('RoI', stencil)
+    
+    frame_roi = cv2.bitwise_and(frame, frame, mask=stencil)
+    plotter.add_image('cropped', frame_roi)
+    print('frame_roi shape =', frame_roi.shape)
+    
+    # filter on yellow (hsv) and white (gray)
+    frame_hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+    frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+
+    yellow_lo = np.array([10, 100, 100], dtype='uint8')
+    yellow_hi = np.array([30, 255, 255], dtype='uint8')
+    mask_yellow = cv2.inRange(frame_hsv, yellow_lo, yellow_hi)
+    mask_white = cv2.inRange(frame_gray, 170, 255)
+    mask_yw = cv2.bitwise_or(mask_yellow, mask_white)
+    plotter.add_image('mask_yellow', mask_yellow)
+    plotter.add_image('mask_white', mask_white)
+    
+    frame_roi_yw = cv2.bitwise_and(frame_roi, frame_roi, mask=mask_yw)
+    plotter.add_image('masked yw roi', frame_roi_yw)
+    
+    _, frame_threshold = cv2.threshold(frame_roi_yw, 100, 250, cv2.THRESH_BINARY)
+    plotter.add_image('thresh:ed', frame_threshold)
+
+    lines = cv2.HoughLinesP(frame_threshold[:,:,0], 1, np.pi/180.0, 40, maxLineGap=400)
+    print(lines)
+    lines_overlay = np.zeros_like(frame)
+    
+    left_x, left_y, right_x, right_y = [], [], [], []
+    for line in lines:
+        x1, y1, x2, y2 = line[0]
+        
+        beta1 = np.polyfit((x1, x2), (y1, y2), 1)[0]
+        if beta1 > 0:
+            left_x.append([x1, x2])
+            left_y.append([y1, y2])
+        else:
+            right_x.append([x1, x2])
+            right_y.append([y1, y2])
+        
+        cv2.circle(lines_overlay, (x1, y1), 8, (0, 255, 255))
+        cv2.circle(lines_overlay, (x2, y2), 8, (0, 255, 255))
+        #cv2.line(lines_overlay, (x1, y1), (x2, y2), (255, 0, 0), 3)
+    
+    #left_x = np.array(left_x)
+    #left_y = np.array(left_y)
+    #right_x = np.array(right_x)
+    #right_y = np.array(right_y)
+    #
+    #print('left_x', left_x)
+    #print('left_y', left_y)
+    #print('right_x', right_x)
+    #print('right_y', right_y)
+    #
+    #print('left_x min, max:', np.min(left_x), np.max(left_x))
+    #print('left_y min, max:', np.min(left_y), np.max(left_y))
+    #print('right_x min, max:', np.min(right_x), np.max(right_x))
+    #print('right_y min, max:', np.min(right_y), np.max(right_y))
+    #
+    #p0 = (np.min(left_x), np.min(left_y))
+    #p1 = (np.max(left_x), np.max(left_y))
+    #p2 = (np.min(right_x), np.max(right_y))
+    #p3 = (np.max(right_x), np.min(right_y))
+    #cv2.line(lines_overlay, p0, p1, (0, 255, 0), 4)
+    #cv2.line(lines_overlay, p2, p3, (0, 255, 0), 4)
+    #cv2.fillConvexPoly(lines_overlay, np.array([p0, p1, p2, p3]), (255, 0, 0))
+    frame_lines = cv2.addWeighted(frame, 1.0, lines_overlay, 1, 1)
+    plotter.add_image('with lines', frame_lines, '')
+    
+    plotter.plot_all()
+    
+    return frame_lines
+    
+    
