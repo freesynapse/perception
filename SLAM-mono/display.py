@@ -1,7 +1,9 @@
 
-
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"        
 import pygame
 import numpy as np
+import cv2
 
 
 class Display2D(object):
@@ -11,14 +13,21 @@ class Display2D(object):
         self.surface = pygame.Surface(self.screen.get_size()).convert()
         self.is_running_ = True
         
+        self.width, self.height = W, H
+        
         self.target_fps = fps_cap
-        self.fps = 0.0
+        self.fps = 30.0
         self.frame_count = 0
         self.frame_time = 1000.0 / float(self.target_fps)
         
     #------------------------------------------------------------------------------------
     def render(self, frame):
-        t0 = pygame.time.get_ticks()
+        
+        # TODO : remove this assertion
+        if frame[:,:,0].shape != (self.width, self.height):
+            frame_ = cv2.resize(frame, (self.width, self.height))
+        else:
+            frame_ = frame
         
         for event in pygame.event.get():
             if event == pygame.QUIT:
@@ -27,22 +36,12 @@ class Display2D(object):
                 if event.key == pygame.K_ESCAPE:
                     self.is_running_ = False
         
-        pygame.surfarray.blit_array(self.surface, frame.swapaxes(0, 1)[:, :, [0, 1, 2]])
+        frame_ = cv2.cvtColor(frame_, cv2.COLOR_BGR2RGB)
+        pygame.surfarray.blit_array(self.surface, frame_.swapaxes(0, 1)[:, :, [0, 1, 2]])
         self.screen.blit(self.surface, (0, 0))
         
         pygame.display.flip()
-        
-        # set fps
-        t1 = pygame.time.get_ticks()
-        sleep_time = int(self.frame_time - (t1 - t0))
-        #if sleep_time > 0: pygame.time.wait(sleep_time)
-        t2 = pygame.time.get_ticks()
-        self.fps = (1000.0 / (t2 - t0))
-        self.frame_count += 1
-        
-        if self.frame_count % int(self.target_fps) == 0:
-            print(self.fps)
-        
+                
     #------------------------------------------------------------------------------------
     def is_running(self):
         return self.is_running_

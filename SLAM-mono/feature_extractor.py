@@ -9,23 +9,21 @@ class FeatureExtractor(object):
         self.width = width
         self.height = height
         self.orb = cv2.ORB_create()
-        # TODO : replace with self.last_frame?
-        self.frames = Queue(maxsize=20)
-        self.BFMatcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        self.BFMatcher = cv2.BFMatcher(cv2.NORM_HAMMING)#, crossCheck=True)
+        self.this_frame = None
+        self.last_frame = None
         
     def process_frame(self, frame):
         """
         Returns the extracted keypoints of a frame.
         """
-        # TODO : remove this assertion
+        self.last_frame = self.this_frame
+        
+        # TODO : remove this assertion?
         if frame[:,:,0].shape != (self.width, self.height):
             frame_ = cv2.resize(frame, (self.width, self.height))
         else:
             frame_ = frame
-        
-        if self.frames.full():
-            self.frames.get()
-        self.frames.put(frame_)
         
         #kps, des = self.orb.detectAndCompute(frame_, None)
         pts = cv2.goodFeaturesToTrack(np.mean(frame_, axis=2).astype(np.uint8), 
@@ -35,11 +33,33 @@ class FeatureExtractor(object):
         kps = [cv2.KeyPoint(x=p[0][0], y=p[0][1], _size=20) for p in pts]
         kps, des = self.orb.compute(frame_, kps)
 
-        return kps, des, frame_
+        self.this_frame = { 'des': des, 'kps': kps }
+
+        return kps, des
     
-    def match_frames(self, f0, f1):
+    def match_frames(self):
         """
-        Find matching keypoints between frames to track.
+        Find matching keypoints between frames to track using 
+        ORB feature descriptors.
         """
-        pass        
+        if self.last_frame is not None:
+            
+            # match ORB descriptors between frames
+            matches = self.BFMatcher.knnMatch(self.this_frame['des'], self.last_frame['des'], k=2)
+            
+            matched_pts = []
+            idx0, idx1 = [], []
+            
+            # Lowe's ratio test for knn matching
+            for m, n in matches:
+                if m.distance < 0.75 * n.distance:
+                    p0 = self.this_frame['kps'][m.queryIdx]
+                    p1 = self.last_frame['kps'][m.trainIdx]
+                    if m.queryIdx not in idx0 and m.trainIdx not in idx1:
+                        idx0.append(m.queryIdx)
+                        idx1.append(m.trainIdx)
+                        matched_pts.append((p0, p1))
+            
+            return matched_pts
+        
 
