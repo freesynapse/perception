@@ -10,7 +10,7 @@ class Timer(object):
         self.delta = 0.0
         self.verbose = verbose
 
-    def get(self):
+    def update(self):
         self.t1 = pygame.time.get_ticks()
         self.delta = self.t1 - self.t0
         

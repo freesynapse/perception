@@ -12,7 +12,7 @@ from timer import Timer
 
 if __name__ == '__main__':
     render_size = 960, 540
-    cap_size = 480, 270
+    cap_size = 960, 540
     
     #filename = '../_resources/fake-SLAM/fake_slam.mp4'
     filename = '../_resources/driving0.mp4'
@@ -33,8 +33,8 @@ if __name__ == '__main__':
             matched_pts = extractor.match_frames()
             if matched_pts is not None:
                 for pt0, pt1 in matched_pts:
-                    u0, v0 = int(pt0.pt[0]), int(pt0.pt[1])
-                    u1, v1 = int(pt1.pt[0]), int(pt1.pt[1])
+                    u0, v0 = int(pt0[0]), int(pt0[1])
+                    u1, v1 = int(pt1[0]), int(pt1[1])
                     cv2.circle(img=frame, center=(u0, v0), radius=3, color=(0, 255, 0))
                     cv2.line(img=frame, pt1=(u0, v0), pt2=(u1, v1), color=(255, 0, 0))
 
@@ -44,8 +44,9 @@ if __name__ == '__main__':
         else:
             break
         
-        timer.get()
-    
+        timer.update()
+
+
     video.release()
     
     
