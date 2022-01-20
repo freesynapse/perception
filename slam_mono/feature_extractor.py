@@ -1,4 +1,5 @@
 
+from curses import noraw
 import cv2
 import numpy as np
 
@@ -7,6 +8,14 @@ from skimage.transform import FundamentalMatrixTransform
 
 np.set_printoptions(suppress=True)
 
+
+#----------------------------------------------------------------------------------------
+def add_ones(x):
+    # turns [[x, y]] into [[x, y, 1]]
+    if len(x.shape) == 1:
+        return np.concatenate([x, np.array([1.0])], axis=0)
+    # else:
+    return np.concatenate([x, np.ones((x.shape[0], 1))], axis=1)
 
 #----------------------------------------------------------------------------------------
 def pose_from_Rt(R, t):
@@ -19,7 +28,7 @@ def pose_from_Rt(R, t):
     return M
 
 #----------------------------------------------------------------------------------------
-def fundamental_to_Rt(F):
+def F_to_Rt(F):
     """
     Calculate the pose (rotation and translation of the camera)
     from the fundamental matrix.
@@ -40,13 +49,17 @@ def fundamental_to_Rt(F):
 
 #----------------------------------------------------------------------------------------
 class FeatureExtractor(object):
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
+    def __init__(self, K):
         self.orb = cv2.ORB_create()
         self.BFMatcher = cv2.BFMatcher(cv2.NORM_HAMMING)#, crossCheck=True)
         self.this_frame = None
         self.last_frame = None
+        
+        # camera intrinsics
+        self.K = K
+        self.K_inv = np.linalg.inv(K)
+        self.W = int(2 * K[0, 2])   # width
+        self.H = int(2 * K[1, 2])   # height
         
     #------------------------------------------------------------------------------------
     def process_frame(self, frame):
@@ -56,16 +69,16 @@ class FeatureExtractor(object):
         self.last_frame = self.this_frame
         
         # TODO : remove this assertion?
-        if frame[:,:,0].shape != (self.width, self.height):
-            frame_ = cv2.resize(frame, (self.width, self.height))
+        if frame[:,:,0].shape != (self.W, self.H):
+            frame_ = cv2.resize(frame, (self.W, self.H))
         else:
             frame_ = frame
         
         #kps, des = self.orb.detectAndCompute(frame_, None)
         pts = cv2.goodFeaturesToTrack(np.mean(frame_, axis=2).astype(np.uint8), 
                                       maxCorners=3000,
-                                      qualityLevel=0.1,
-                                      minDistance=5)
+                                      qualityLevel=0.01,
+                                      minDistance=7)
         
         kps, des = None, None
         if pts is not None:
@@ -110,27 +123,21 @@ class FeatureExtractor(object):
             
             # Estimate the epipolar geometry between frames using
             # ransac (identifying inliers and outliers in the matches)
-            # between frames, and using these inliers to estimate the 
+            # between frames, and using resulting inliers to estimate the 
             # fundamental matrix.
             # https://www.robots.ox.ac.uk/~vgg/hzbook/hzbook2/HZepipolar.pdf
             
-            assert(ret.shape[0] >= 8)
-
             # We assume that the focal point is the center of the image
             # (which would be true for all fps videos). Therefore, we subtract
             # by half the image shape, so that the coordinate system essentially
             # becomes (-w/2, -h/2) to (w/2, h/2)
-            def focal_point_transform(pt_array, normalize):
-                if normalize:
-                    pt_array[:, :, 0] -= self.width / 2
-                    pt_array[:, :, 1] -= self.height / 2
-                else:
-                    pt_array[:, :, 0] += self.width / 2
-                    pt_array[:, :, 1] += self.height / 2
-                return pt_array
 
+            assert(ret.shape[0] >= 8)
+            
             # perform focal point transform (according to above)
-            ret = focal_point_transform(ret, normalize=True)
+            ret[:, 0, :] = np.dot(self.K_inv, add_ones(ret[:, 0, :]).T).T[:, 0:2]
+            ret[:, 1, :] = np.dot(self.K_inv, add_ones(ret[:, 1, :]).T).T[:, 0:2]
+            #ret = self.focal_point_transform(ret, normalize=True)
             
             # estimate the fundamental matrix, F, and filter out outlying matches
             model, inliers = ransac(data=(ret[:, 0], ret[:, 1]),
@@ -139,8 +146,8 @@ class FeatureExtractor(object):
                                     residual_threshold=1,
                                     max_trials=100)
             
-            print(f"{len(self.this_frame['des'])} -> {len(ret)} -> {len(inliers)} -> {sum(inliers)}")
-            print(model.params)
+            print(f"{len(self.this_frame['des'])} -> {len(ret)} -> {sum(inliers)}")
+            print('F:\n', model.params)
             
             # From the fundamental matrix, we can estimate the instrinsic
             # camera pose (rotation, R, and translation, t)
@@ -148,7 +155,9 @@ class FeatureExtractor(object):
 
             # Return to original image coordinates for plotting of features and matches
             # TODO : move this somewhere else? More efficient implementation?
-            ret = focal_point_transform(ret, normalize=False)
+            ret[:, 0, :] = np.dot(self.K, add_ones(ret[:, 0, :]).T).T[:, 0:2]
+            ret[:, 1, :] = np.dot(self.K, add_ones(ret[:, 1, :]).T).T[:, 0:2]
+            #ret = self.focal_point_transform(ret, normalize=False)
             
             return ret[inliers]
         

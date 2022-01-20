@@ -7,13 +7,16 @@ import cv2
 
 
 class Display2D(object):
-    def __init__(self, W, H, fps_cap):
+    def __init__(self, W, H, fps_cap, win_pos=(0, 0)):
+        # position the window
+        os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (win_pos[0], 
+                                                        win_pos[1])
         pygame.init()
         self.screen = pygame.display.set_mode((W, H), pygame.DOUBLEBUF)
         self.surface = pygame.Surface(self.screen.get_size()).convert()
         self.is_running_ = True
         
-        self.width, self.height = W, H
+        self.W, self.H = W, H
         
         self.target_fps = fps_cap
         self.fps = 30.0
@@ -24,8 +27,8 @@ class Display2D(object):
     def render(self, frame):
         
         # TODO : remove this assertion
-        if frame[:,:,0].shape != (self.width, self.height):
-            frame_ = cv2.resize(frame, (self.width, self.height))
+        if frame[:,:,0].shape != (self.W, self.H):
+            frame_ = cv2.resize(frame, (self.W, self.H))
         else:
             frame_ = frame
         

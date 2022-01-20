@@ -5,23 +5,27 @@ import cv2
 import numpy as np
 
 from opencv_utils import Video
-from feature_extractor import FeatureExtractor
+from feature_extractor import FeatureExtractor, add_ones
 from display import Display2D
 from timer import Timer
 
 
 if __name__ == '__main__':
-    render_size = 960, 540
-    cap_size = 960, 540
+    W, H = 960, 540
+    
+    # focal depth: i.e. no. of pixels per radian the camera rotates
+    f = 1
+    # the camera matrix
+    K = np.array([[f, 0.0, W/2], [0, f, H/2], [0, 0, 1]])
     
     #filename = '../_resources/fake-SLAM/fake_slam.mp4'
     filename = '../_resources/driving0.mp4'
     
-    video = Video(filename, *cap_size)
+    video = Video(filename, W, H)
     print(video)
     
-    extractor = FeatureExtractor(*cap_size)
-    display = Display2D(*render_size, video.fps)
+    fe = FeatureExtractor(K)
+    display = Display2D(W, H, video.fps)
     
     while (video.is_running() and display.is_running()):
         timer = Timer(False)
@@ -29,8 +33,8 @@ if __name__ == '__main__':
         ret, frame = video.get_next_frame()
 
         if ret:
-            kps, des = extractor.process_frame(frame)
-            matched_pts = extractor.match_frames()
+            kps, des = fe.process_frame(frame)
+            matched_pts = fe.match_frames()
             if matched_pts is not None:
                 for pt0, pt1 in matched_pts:
                     u0, v0 = int(pt0[0]), int(pt0[1])
@@ -48,5 +52,7 @@ if __name__ == '__main__':
 
 
     video.release()
+    print(K)
+    print(fe.K_inv)
     
     
