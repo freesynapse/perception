@@ -1,11 +1,10 @@
 #!/usr/bin/python3
 
-from nis import match
 import cv2
 import numpy as np
 
 from opencv_utils import Video
-from feature_extractor import FeatureExtractor, add_ones
+from feature_extractor import FeatureExtractor
 from display import Display2D
 from timer import Timer
 
@@ -13,8 +12,8 @@ from timer import Timer
 if __name__ == '__main__':
     W, H = 960, 540
     
-    # focal depth: i.e. no. of pixels per radian the camera rotates
-    f = 1
+    # focal length; number of pixels per radian the camera rotates
+    f = 270
     # the camera matrix
     K = np.array([[f, 0.0, W/2], [0, f, H/2], [0, 0, 1]])
     
@@ -34,9 +33,9 @@ if __name__ == '__main__':
 
         if ret:
             kps, des = fe.process_frame(frame)
-            matched_pts = fe.match_frames()
-            if matched_pts is not None:
-                for pt0, pt1 in matched_pts:
+            matches = fe.match_frames()
+            if matches is not None:
+                for pt0, pt1 in matches:
                     u0, v0 = int(pt0[0]), int(pt0[1])
                     u1, v1 = int(pt1[0]), int(pt1[1])
                     cv2.circle(img=frame, center=(u0, v0), radius=3, color=(0, 255, 0))
@@ -52,7 +51,5 @@ if __name__ == '__main__':
 
 
     video.release()
-    print(K)
-    print(fe.K_inv)
     
     
