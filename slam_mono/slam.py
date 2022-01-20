@@ -34,12 +34,16 @@ if __name__ == '__main__':
         if ret:
             kps, des = fe.process_frame(frame)
             matches = fe.match_frames()
-            if matches is not None:
-                for pt0, pt1 in matches:
-                    u0, v0 = int(pt0[0]), int(pt0[1])
-                    u1, v1 = int(pt1[0]), int(pt1[1])
-                    cv2.circle(img=frame, center=(u0, v0), radius=3, color=(0, 255, 0))
-                    cv2.line(img=frame, pt1=(u0, v0), pt2=(u1, v1), color=(255, 0, 0))
+            
+            # Always true the first frame.
+            if matches is None: 
+                continue
+            
+            for pt0, pt1 in matches:
+                u0, v0 = int(pt0[0]), int(pt0[1])
+                u1, v1 = int(pt1[0]), int(pt1[1])
+                cv2.circle(img=frame, center=(u0, v0), radius=3, color=(0, 255, 0))
+                cv2.line(img=frame, pt1=(u0, v0), pt2=(u1, v1), color=(255, 0, 0))
 
             # blit to SDL surface
             display.render(frame)
