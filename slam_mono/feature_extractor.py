@@ -158,7 +158,7 @@ class FeatureExtractor(object):
                                     model_class=EssentialMatrixTransform,
                                     min_samples=8,
                                     #residual_threshold=1,
-                                    residual_threshold=0.003,
+                                    residual_threshold=0.005,
                                     max_trials=100)
             
             print(f"{len(self.this_frame['des'])} -> {len(ret)} -> {sum(inliers)}")

@@ -12,12 +12,12 @@ class Display2D(object):
         # position the window
         os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (win_pos[0], 
                                                         win_pos[1])
+        self.W, self.H = int(W), int(H)
         pygame.init()
-        self.screen = pygame.display.set_mode((W, H), pygame.DOUBLEBUF)
+        self.screen = pygame.display.set_mode((self.W, self.H), pygame.DOUBLEBUF)
         self.surface = pygame.Surface(self.screen.get_size()).convert()
         self.is_running_ = True
         
-        self.W, self.H = W, H
         
         self.target_fps = fps_cap
         self.fps = 30.0

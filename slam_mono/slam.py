@@ -11,18 +11,25 @@ from timer import Timer
 # 3:38:46
 
 if __name__ == '__main__':
-    W, H = 960, 540
+
+    filename = '../_resources/driving0.mp4'
+    video = Video(filename)
+    
+    W, H = video.get_resolution()
     
     # focal length; number of pixels per radian the camera rotates
-    f = 270
+    f = 500 # seems ok
+
+    # rescale frames to 1024 x h
+    scale = 1024.0 / W
+    H *= scale
+    f *= scale
+    W *= scale
+    video.set_resolution(W, H)
+    
     # the camera matrix
     K = np.array([[f, 0.0, W/2], [0, f, H/2], [0, 0, 1]])
-    
-    #filename = '../_resources/fake-SLAM/fake_slam.mp4'
-    filename = '../_resources/driving0.mp4'
-    
-    video = Video(filename, W, H)
-    print(video)
+    print(K)
     
     fe = FeatureExtractor(K)
     display = Display2D(W, H, video.fps)
@@ -53,7 +60,6 @@ if __name__ == '__main__':
             break
         
         timer.update()
-
 
     video.release()
     
