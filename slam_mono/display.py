@@ -6,6 +6,7 @@ import numpy as np
 import cv2
 
 
+
 class Display2D(object):
     def __init__(self, W, H, fps_cap, win_pos=(0, 0)):
         # position the window
@@ -38,6 +39,8 @@ class Display2D(object):
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.is_running_ = False
+                elif event.key == pygame.K_SPACE:
+                    self.pause_()
         
         frame_ = cv2.cvtColor(frame_, cv2.COLOR_BGR2RGB)
         pygame.surfarray.blit_array(self.surface, frame_.swapaxes(0, 1)[:, :, [0, 1, 2]])
@@ -45,6 +48,18 @@ class Display2D(object):
         
         pygame.display.flip()
                 
+    #------------------------------------------------------------------------------------
+    def pause_(self):
+        while (1):
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        return
+                    elif event.key == pygame.K_ESCAPE:
+                        self.is_running_ = False
+                        return
+            pygame.time.wait(33)
+
     #------------------------------------------------------------------------------------
     def is_running(self):
         return self.is_running_

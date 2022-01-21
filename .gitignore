@@ -1,4 +1,4 @@
 **/_resources
-**/slam_mono/__pycahce__
-**/lane_line_detection/__pycahce__
+__pycache__/
+*.pyc
 

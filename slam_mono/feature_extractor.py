@@ -33,12 +33,15 @@ def E_to_Rt(E):
     Calculate the pose (rotation and translation of the camera)
     from the essential matrix.
     """
+        
     # We have now switched to an essential matrix, and trying to get the
     # pose of the camera (i.e. rotation, R, and translation, t)
     W = np.mat([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
     U, S, V_T = np.linalg.svd(E)
     
-    # There exists 4 different cases which satisfy the decomposition (a-d):
+    # There exists 4-way ambiguity which satisfy the decomposition (a-d);
+    # Hartley & Zisserman, p 260, fig 9.12
+
     # a+b: Using the determinants we can take the negative of either U or V_T
     assert(np.linalg.det(U) > 0) # should always be 
     #if np.linalg.det(U) < 0:
@@ -103,7 +106,11 @@ class FeatureExtractor(object):
         Find matching keypoints between frames to track using 
         ORB feature descriptors.
         """
-        # TODO : deal with this None crap
+        
+        ret = []
+        idxs_curr, idxs_prev = [], []
+
+        # TODO : deal with this None crap: perhaps hot start the feature extraction
         if self.last_frame is not None and \
            self.this_frame['des'] is not None and \
            self.last_frame['des'] is not None:
@@ -111,22 +118,19 @@ class FeatureExtractor(object):
             # match ORB descriptors between frames
             matches = self.BFMatcher.knnMatch(self.this_frame['des'], self.last_frame['des'], k=2)
             
-            ret = []
-            idx0, idx1 = [], []
-            
             # Lowe's ratio test for knn matching
             for m, n in matches:
                 if m.distance < 0.75 * n.distance:
                     p0 = self.this_frame['kps'][m.queryIdx]
                     p1 = self.last_frame['kps'][m.trainIdx]
-                    if m.queryIdx not in idx0 and m.trainIdx not in idx1:
-                        idx0.append(m.queryIdx)
-                        idx1.append(m.trainIdx)
+                    if m.queryIdx not in idxs_curr and m.trainIdx not in idxs_prev:
+                        idxs_curr.append(m.queryIdx)
+                        idxs_prev.append(m.trainIdx)
                         ret.append((p0, p1))
             
             ret = np.array(ret)
-            idx0 = np.array(idx0)
-            idx1 = np.array(idx1)
+            idxs_curr = np.array(idxs_curr)
+            idxs_prev = np.array(idxs_prev)
 
             
             # Estimate the epipolar geometry between frames using
@@ -160,14 +164,26 @@ class FeatureExtractor(object):
             print(f"{len(self.this_frame['des'])} -> {len(ret)} -> {sum(inliers)}")
             #print('F:\n', model.params)
             
-            # From the fundamental matrix, we can estimate f_x and f_y of the 
-            # intrinsic camera matrix P, which then can be used to acquitre the 
-            # essential matrix from RANSAC.
-            # The sigma matrix (S) from the decomposition of the fundamental matrix
-            # should (?) be diag(1, 1, 0), so we tweak the f parameter (in slam.py)
-            # until close to this.
-            #U, S, V_T = np.linalg.svd(model.params)
-            #print(S) 
+            # Finding focal length from the fundamental matrix
+            #
+            #    E = K'.T @ F @ K, 
+            #
+            # where E is the essential matrix, K is the camera instrinsic matrix and 
+            # F is the fundamental matrix. 
+            # For E to be correct, there exist a decomposition of U, S, V_T = svd(E)
+            # s.t. E = U @ diag(1, 1, 0) @ V_T. Therefore, when searching for the instrisic
+            # camera matrix K yielding a good approximation of E (more specifically, the 
+            # focal length f [ f=(f_x, f_y), which are assumed to be equal]), we 
+            # can search the space of F for a scalar which results in a diagnonal sigma 
+            # matrix (1, 1, 0) in the single value decomp of F:
+            # > U, S, V_T = np.linalg.svd(model.params)
+            # > print(S) # this should be a vector (1, 1, 0)
+            #
+            # N.B. Although the method above is very crude, since the target values 
+            # of the optimization is known (i.e. np.sum(S.diag()) -> 2.0), a form of 
+            # auto-calibration could be done through search of the f parameter in an 
+            # automated fashion.
+            #
             
             # Extract camera pose from the essential matrix
             self.Rt = E_to_Rt(model.params)
@@ -180,6 +196,10 @@ class FeatureExtractor(object):
             ret[:, 1, :] = np.dot(self.K, add_ones(ret[:, 1, :]).T).T[:, 0:2]
             #ret = self.focal_point_transform(ret, normalize=False)
 
-            return ret[inliers]
+            ret = ret[inliers]
+
+        # return the inlying points, the indices of the points in the current frame
+        # and the indices to the matching points in the previous frame
+        return ret, idxs_curr, idxs_prev
         
 

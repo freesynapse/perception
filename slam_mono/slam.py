@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
         if ret:
             kps, des = fe.process_frame(frame)
-            matches = fe.match_frames()
+            matches, idxs_curr, idxs_prev = fe.match_frames()
             
             # Always true the first frame.
             if matches is None: 
