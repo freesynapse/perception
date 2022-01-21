@@ -8,6 +8,7 @@ from feature_extractor import FeatureExtractor
 from display import Display2D
 from timer import Timer
 
+# 3:38:46
 
 if __name__ == '__main__':
     W, H = 960, 540
